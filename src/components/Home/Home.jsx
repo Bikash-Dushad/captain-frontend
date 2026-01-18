@@ -1,137 +1,79 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
+import Map from "./Map";
 import Navbar from "./Navbar";
-import HeroSection from "./HeroSection";
-import MapSection from "./MapSection";
+import useWebSocket from "../../hooks/useWebSocket";
 import "./Home.css";
 
-const HomePage = () => {
-  const [isOnline, setIsOnline] = useState(false);
-  const [location, setLocation] = useState(null);
-  const [ws, setWs] = useState(null);
+const Home = () => {
+  const [hasStarted, setHasStarted] = useState(false);
+  const [location, setLocation] = useState({ lat: 28.6139, lng: 77.209 });
+  const { isConnected, connectWebSocket, disconnectWebSocket } = useWebSocket();
 
-  const mapRef = useRef(null);
-  const markerRef = useRef(null);
+  const handleStart = async () => {
+    connectWebSocket();
 
-  // Initialize Google Maps when online and location is available
-  useEffect(() => {
-    if (isOnline && location && !mapRef.current) {
-      initMap();
-    }
-  }, [isOnline, location]);
-
-  const initMap = () => {
-    if (typeof google === "undefined") {
-      loadGoogleMapsScript();
-      return;
-    }
-
-    const mapElement = document.getElementById("map");
-    if (!mapElement) return;
-
-    mapRef.current = new google.maps.Map(mapElement, {
-      center: { lat: location.lat, lng: location.lng },
-      zoom: 15,
-      disableDefaultUI: false,
-      zoomControl: true,
-    });
-
-    markerRef.current = new google.maps.Marker({
-      position: { lat: location.lat, lng: location.lng },
-      map: mapRef.current,
-      title: "Your Location",
-      icon: {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 10,
-        fillColor: "#4285F4",
-        fillOpacity: 1,
-        strokeColor: "#ffffff",
-        strokeWeight: 2,
-      },
-    });
-  };
-
-  const loadGoogleMapsScript = () => {
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.REACT_APP_GOOGLE_MAPS_API_KEY}`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => initMap();
-    document.head.appendChild(script);
-  };
-
-  const handleStartEarning = () => {
-    setIsOnline(true);
-
-    // Get current location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
+          const { latitude, longitude } = position.coords;
+          setLocation({ lat: latitude, lng: longitude });
+          setHasStarted(true);
         },
         (error) => {
-          console.error("Error getting location:", error);
-          // Fallback to default location (e.g., Delhi)
-          setLocation({ lat: 28.6139, lng: 77.209 });
-        }
+          console.error("Location error:", error);
+          setHasStarted(true);
+        },
       );
     } else {
-      // Fallback location (Delhi)
-      setLocation({ lat: 28.6139, lng: 77.209 });
+      setHasStarted(true);
     }
-
-    // Initialize WebSocket
-    // Uncomment when backend is ready
-    // const websocket = new WebSocket('ws://localhost:3001');
-    // websocket.onopen = () => console.log('WebSocket connected');
-    // websocket.onmessage = (event) => console.log('Message:', event.data);
-    // websocket.onerror = (error) => console.error('WebSocket error:', error);
-    // setWs(websocket);
-
-    console.log("WebSocket would be initialized here");
   };
 
-  const handleStopEarning = () => {
-    setIsOnline(false);
-    if (ws) {
-      ws.close();
-      setWs(null);
-    }
+  const handleStop = () => {
+    disconnectWebSocket();
+    setHasStarted(false);
   };
 
   return (
     <div className="home-page">
-      <Navbar isOnline={isOnline} />
-
-      <main className="home-main">
-        {!isOnline ? (
-          <HeroSection onStartEarning={handleStartEarning} />
+      <Navbar />
+      <div className="home-content">
+        {!hasStarted ? (
+          <div className="start-section">
+            <h2>Ready to Start?</h2>
+            <button className="start-button" onClick={handleStart}>
+              Start
+            </button>
+            <p className="status-text">
+              WebSocket: {isConnected ? "Connected" : "Disconnected"}
+            </p>
+          </div>
         ) : (
-          <div className="online-content">
-            <div className="online-header">
-              <div className="status-indicator">
-                <div className="status-dot online"></div>
-                <span className="status-text">You're Online</span>
+          <div className="map-section">
+            <div className="map-header">
+              <h3>Live Location</h3>
+              <div className="status-info">
+                <span
+                  className={`status-dot ${isConnected ? "connected" : "disconnected"}`}
+                ></span>
+                <span>
+                  WebSocket: {isConnected ? "Connected" : "Disconnected"}
+                </span>
               </div>
-              <button onClick={handleStopEarning} className="stop-earning-btn">
-                Stop Earning
-              </button>
             </div>
 
-            <MapSection location={location} />
+            <Map location={location} />
 
-            {/* Placeholder for future content */}
-            <div className="additional-info">
-              <h3>Additional Information</h3>
-              <p>Content to be decided...</p>
+            <div className="controls">
+              <button className="stop-button" onClick={handleStop}>
+                Stop
+              </button>
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 };
 
-export default HomePage;
+export default Home;
