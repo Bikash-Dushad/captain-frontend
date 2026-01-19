@@ -104,7 +104,7 @@ const Login = () => {
       if (response?.responseCode === 200) {
         localStorage.setItem("captainToken", response.data.token);
 
-        navigate("/home");
+        navigate("/");
       } else {
         setError(response.data.message || "Invalid OTP");
       }

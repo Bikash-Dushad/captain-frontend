@@ -4,29 +4,53 @@ import io from "socket.io-client";
 const useWebSocket = () => {
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [connectionError, setConnectionError] = useState(null);
 
   // Connect WebSocket
-  const connectWebSocket = useCallback(() => {
-    if (socket) return;
+  const connectWebSocket = useCallback(
+    (token) => {
+      if (socket) {
+        socket.disconnect();
+        setSocket(null);
+        setIsConnected(false);
+        setIsAuthenticated(false);
+      }
 
-    const WS_URL = import.meta.env.WEBSOCKET_URL;
+      console.log("checkig something 1");
 
-    const newSocket = io(WS_URL, {
-      transports: ["websocket"],
-    });
+      if (!token) {
+        console.error("Token required for WebSocket connection");
+        setConnectionError("No authentication token");
+        return;
+      }
 
-    newSocket.on("connect", () => {
-      console.log("WebSocket Connected:", newSocket.id);
-      setIsConnected(true);
-    });
+      const WS_URL = "http://localhost:3003";
+      console.log("🔗 Connecting to WebSocket:", WS_URL);
+      console.log("📋 Using token:", token.substring(0, 20) + "...");
 
-    newSocket.on("disconnect", () => {
-      console.log("WebSocket Disconnected");
-      setIsConnected(false);
-    });
+      const newSocket = io(WS_URL, {
+        transports: ["websocket"],
+        auth: {
+          token: token,
+        },
+      });
 
-    setSocket(newSocket);
-  }, [socket]);
+      newSocket.on("connect", () => {
+        console.log("WebSocket Connected:", newSocket.id);
+        setIsConnected(true);
+        setConnectionError(null);
+      });
+
+      newSocket.on("disconnect", () => {
+        console.log("WebSocket Disconnected");
+        setIsConnected(false);
+      });
+
+      setSocket(newSocket);
+    },
+    [socket],
+  );
 
   // Disconnect WebSocket
   const disconnectWebSocket = useCallback(() => {
@@ -40,6 +64,8 @@ const useWebSocket = () => {
   return {
     socket,
     isConnected,
+    isAuthenticated,
+    connectionError,
     connectWebSocket,
     disconnectWebSocket,
   };

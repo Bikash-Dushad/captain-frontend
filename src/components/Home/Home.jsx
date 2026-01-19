@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Map from "./Map";
 import Navbar from "./Navbar";
 import useWebSocket from "../../hooks/useWebSocket";
@@ -7,26 +7,51 @@ import "./Home.css";
 const Home = () => {
   const [hasStarted, setHasStarted] = useState(false);
   const [location, setLocation] = useState({ lat: 28.6139, lng: 77.209 });
-  const { isConnected, connectWebSocket, disconnectWebSocket } = useWebSocket();
+  const {
+    isConnected,
+    isAuthenticated,
+    connectionError,
+    connectWebSocket,
+    disconnectWebSocket,
+  } = useWebSocket();
+  const [error, setError] = useState(null);
+  const [token, setToken] = useState(null);
+  useEffect(() => {
+    const authToken = localStorage.getItem("captainToken");
+    if (authToken) {
+      setToken(authToken);
+    } else {
+      setError("No authentication token found. Please login first.");
+    }
+  }, []);
 
   const handleStart = async () => {
-    connectWebSocket();
+    setError(null);
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          setLocation({ lat: latitude, lng: longitude });
-          setHasStarted(true);
-        },
-        (error) => {
-          console.error("Location error:", error);
-          setHasStarted(true);
-        },
-      );
-    } else {
-      setHasStarted(true);
+    if (!navigator.geolocation) {
+      setError("Location permission is required");
+      return;
     }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        console.log(latitude, longitude)
+        setLocation({ lat: latitude, lng: longitude });
+        setHasStarted(true);
+        connectWebSocket(token);
+      },
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) {
+          setError("Location permission denied");
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          setError("Location information unavailable");
+        } else if (error.code === error.TIMEOUT) {
+          setError("Location request timed out");
+        } else {
+          setError("An unknown error occurred");
+        }
+      },
+    );
   };
 
   const handleStop = () => {
