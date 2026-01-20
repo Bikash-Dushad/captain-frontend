@@ -9,13 +9,15 @@ const Home = () => {
   const [location, setLocation] = useState({ lat: 28.6139, lng: 77.209 });
   const {
     isConnected,
-    isAuthenticated,
-    connectionError,
     connectWebSocket,
     disconnectWebSocket,
+    nearbyCaptains,
+    fetchNearbyCaptains,
+    getLocationAndFetchCaptains,
   } = useWebSocket();
   const [error, setError] = useState(null);
   const [token, setToken] = useState(null);
+
   useEffect(() => {
     const authToken = localStorage.getItem("captainToken");
     if (authToken) {
@@ -25,33 +27,24 @@ const Home = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (hasStarted && isConnected) {
+      // Get user's current location and fetch captains
+      getLocationAndFetchCaptains();
+
+      // Set up interval to update captains periodically
+      const intervalId = setInterval(() => {
+        getLocationAndFetchCaptains();
+      }, 5000); // Update every 5 seconds
+
+      return () => clearInterval(intervalId);
+    }
+  }, [hasStarted, isConnected, getLocationAndFetchCaptains]);
+
   const handleStart = async () => {
     setError(null);
-
-    if (!navigator.geolocation) {
-      setError("Location permission is required");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        console.log(latitude, longitude)
-        setLocation({ lat: latitude, lng: longitude });
-        setHasStarted(true);
-        connectWebSocket(token);
-      },
-      (error) => {
-        if (error.code === error.PERMISSION_DENIED) {
-          setError("Location permission denied");
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-          setError("Location information unavailable");
-        } else if (error.code === error.TIMEOUT) {
-          setError("Location request timed out");
-        } else {
-          setError("An unknown error occurred");
-        }
-      },
-    );
+    setHasStarted(true);
+    connectWebSocket(token);
   };
 
   const handleStop = () => {
@@ -93,6 +86,30 @@ const Home = () => {
               <button className="stop-button" onClick={handleStop}>
                 Stop
               </button>
+            </div>
+            {/* Display nearby captains list */}
+            <div className="captains-list">
+              <h4>Nearby Captains ({nearbyCaptains.length})</h4>
+              {error && <p className="error-message">{error}</p>}
+
+              {nearbyCaptains.length === 0 ? (
+                <p className="no-captains">No captains found nearby</p>
+              ) : (
+                <div className="captains-grid">
+                  {nearbyCaptains.map((captain) => (
+                    <div key={captain.id} className="captain-card">
+                      <div className="captain-info">
+                        <h5>Captain ID: {captain.id.substring(0, 8)}...</h5>
+                        <div className="captain-location">
+                          <span>📍 Location:</span>
+                          <p>Lat: {captain.lat.toFixed(6)}</p>
+                          <p>Lng: {captain.lng.toFixed(6)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
