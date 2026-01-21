@@ -1,17 +1,27 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import io from "socket.io-client";
+
+const hasMovedEnough = (prev, next) => {
+  if (prev.lat === null || prev.lng === null) return true;
+
+  const distance =
+    Math.abs(prev.lat - next.lat) + Math.abs(prev.lng - next.lng);
+
+  return distance > 0.00005; // ~5 meters
+};
 
 const useWebSocket = () => {
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState(null);
-  const locationIntervalRef = useRef(null);
-  const [nearbyCaptains, setNearbyCaptains] = useState([]);
+  const [riderLocation, setRiderLocation] = useState(null);
+  const lastLocationRef = useRef({ lat: null, lng: null });
+  const watchIdRef = useRef(null);
 
   // Connect WebSocket
   const connectWebSocket = useCallback(
     (token) => {
-      const WS_URL = "http://localhost:3003";
+      const wsUrl = "http://localhost:3003";
 
       if (socket) {
         socket.disconnect();
@@ -25,48 +35,62 @@ const useWebSocket = () => {
         return;
       }
 
-      const newSocket = io(WS_URL, {
+      const newSocket = io(wsUrl, {
         transports: ["websocket"],
-        auth: {
-          token: token,
-        },
-      });
-      newSocket.on("connect_error", (err) => {
-        console.error("❌ WebSocket connect error:", err.message);
-        setConnectionError(err.message);
+        auth: { token },
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
       });
 
       newSocket.on("connect", () => {
-        console.log("WebSocket Connected:", newSocket.id);
+        console.log("✅ WebSocket connected:", newSocket.id);
         setIsConnected(true);
         setConnectionError(null);
-        locationIntervalRef.current = setInterval(() => {
-          navigator.geolocation.getCurrentPosition(
+
+        // Start watching location
+        if (!watchIdRef.current && navigator.geolocation) {
+          watchIdRef.current = navigator.geolocation.watchPosition(
             (position) => {
               const { latitude, longitude } = position.coords;
-
-              newSocket.emit("LOCATION_UPDATE", {
+              const nextLocation = {
                 lat: latitude,
                 lng: longitude,
-              });
+              };
+              if (hasMovedEnough(lastLocationRef.current, nextLocation)) {
+                lastLocationRef.current = nextLocation;
+
+                setRiderLocation(nextLocation);
+
+                newSocket.emit("LOCATION_UPDATE", nextLocation);
+              }
             },
-            (err) => console.error("Location error:", err),
-            { enableHighAccuracy: true },
+            (err) => {
+              console.error("❌ Location error:", err);
+            },
+            {
+              enableHighAccuracy: true,
+              maximumAge: 1000,
+              timeout: 5000,
+            },
           );
-        }, 2000);
-      });
-
-      newSocket.on("NEARBY_CAPTAINS", (captains) => {
-        setNearbyCaptains(captains);
-      });
-
-      newSocket.on("disconnect", () => {
-        console.log("WebSocket Disconnected");
-        setIsConnected(false);
-        if (locationIntervalRef.current) {
-          clearInterval(locationIntervalRef.current);
-          locationIntervalRef.current = null;
         }
+      });
+
+      newSocket.on("disconnect", (reason) => {
+        console.log("❌ WebSocket disconnected:", reason);
+        setIsConnected(false);
+
+        // Stop watching location on disconnect
+        if (watchIdRef.current) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+        }
+      });
+
+      newSocket.on("connect_error", (err) => {
+        console.error("❌ WebSocket connect error:", err.message);
+        setConnectionError(err.message);
       });
 
       setSocket(newSocket);
@@ -74,61 +98,38 @@ const useWebSocket = () => {
     [socket],
   );
 
-  // Function to fetch nearby captains with user's location
-  const fetchNearbyCaptains = useCallback(
-    (lat, lng) => {
-      if (!socket || !isConnected) {
-        console.error("Socket not connected");
-        return;
-      }
-
-      socket.emit("USER_LOCATION", {
-        lat: lat,
-        lng: lng,
-      });
-      console.log("Requesting nearby captains for location:", lat, lng);
-    },
-    [socket, isConnected],
-  );
-
-  // Helper function to get current location and fetch captains
-  const getLocationAndFetchCaptains = useCallback(() => {
-    if (!socket || !isConnected) {
-      console.error("Socket not connected");
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        fetchNearbyCaptains(latitude, longitude);
-      },
-      (err) => {
-        console.error("Error getting location:", err);
-        // You might want to handle this error in your UI
-      },
-      { enableHighAccuracy: true },
-    );
-  }, [socket, isConnected, fetchNearbyCaptains]);
-
-  // Disconnect WebSocket
+  // 2️⃣ Disconnect WebSocket
   const disconnectWebSocket = useCallback(() => {
     if (socket) {
       socket.disconnect();
       setSocket(null);
       setIsConnected(false);
+      if (watchIdRef.current) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
     }
+  }, [socket]);
+
+  // 3️⃣ Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (socket) {
+        socket.disconnect();
+      }
+      if (watchIdRef.current) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
   }, [socket]);
 
   return {
     socket,
     isConnected,
     connectionError,
+    riderLocation,
     connectWebSocket,
     disconnectWebSocket,
-    nearbyCaptains,
-    fetchNearbyCaptains, // Send specific location to server
-    getLocationAndFetchCaptains, // Get current location and fetch captains
   };
 };
 

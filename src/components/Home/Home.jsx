@@ -6,15 +6,8 @@ import "./Home.css";
 
 const Home = () => {
   const [hasStarted, setHasStarted] = useState(false);
-  const [location, setLocation] = useState({ lat: 28.6139, lng: 77.209 });
-  const {
-    isConnected,
-    connectWebSocket,
-    disconnectWebSocket,
-    nearbyCaptains,
-    fetchNearbyCaptains,
-    getLocationAndFetchCaptains,
-  } = useWebSocket();
+  const { isConnected, connectWebSocket, riderLocation, disconnectWebSocket } =
+    useWebSocket();
   const [error, setError] = useState(null);
   const [token, setToken] = useState(null);
 
@@ -26,20 +19,6 @@ const Home = () => {
       setError("No authentication token found. Please login first.");
     }
   }, []);
-
-  useEffect(() => {
-    if (hasStarted && isConnected) {
-      // Get user's current location and fetch captains
-      getLocationAndFetchCaptains();
-
-      // Set up interval to update captains periodically
-      const intervalId = setInterval(() => {
-        getLocationAndFetchCaptains();
-      }, 5000); // Update every 5 seconds
-
-      return () => clearInterval(intervalId);
-    }
-  }, [hasStarted, isConnected, getLocationAndFetchCaptains]);
 
   const handleStart = async () => {
     setError(null);
@@ -63,8 +42,9 @@ const Home = () => {
               Start
             </button>
             <p className="status-text">
-              WebSocket: {isConnected ? "Connected" : "Disconnected"}
+              Status: {isConnected ? "Connected" : "Disconnected"}
             </p>
+            {error && <p className="error-text">{error}</p>}
           </div>
         ) : (
           <div className="map-section">
@@ -74,42 +54,20 @@ const Home = () => {
                 <span
                   className={`status-dot ${isConnected ? "connected" : "disconnected"}`}
                 ></span>
-                <span>
-                  WebSocket: {isConnected ? "Connected" : "Disconnected"}
-                </span>
+                <span>{isConnected ? "Connected" : "Disconnected"}</span>
               </div>
             </div>
 
-            <Map location={location} />
+            {!riderLocation ? (
+              <p>Fetching your location...</p>
+            ) : (
+              <Map riderLocation={riderLocation} />
+            )}
 
             <div className="controls">
               <button className="stop-button" onClick={handleStop}>
                 Stop
               </button>
-            </div>
-            {/* Display nearby captains list */}
-            <div className="captains-list">
-              <h4>Nearby Captains ({nearbyCaptains.length})</h4>
-              {error && <p className="error-message">{error}</p>}
-
-              {nearbyCaptains.length === 0 ? (
-                <p className="no-captains">No captains found nearby</p>
-              ) : (
-                <div className="captains-grid">
-                  {nearbyCaptains.map((captain) => (
-                    <div key={captain.id} className="captain-card">
-                      <div className="captain-info">
-                        <h5>Captain ID: {captain.id.substring(0, 8)}...</h5>
-                        <div className="captain-location">
-                          <span>📍 Location:</span>
-                          <p>Lat: {captain.lat.toFixed(6)}</p>
-                          <p>Lng: {captain.lng.toFixed(6)}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         )}

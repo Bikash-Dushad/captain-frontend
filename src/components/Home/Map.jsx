@@ -1,31 +1,24 @@
-import React, { useEffect, useRef } from 'react';
-import './Map.css';
+import React, { useEffect, useRef } from "react";
+import "./Map.css";
 
-const Map = ({ location }) => {
+const Map = ({ riderLocation }) => {
   const mapRef = useRef(null);
+  const markerRef = useRef(null);
 
   useEffect(() => {
-    // Dynamically load Leaflet CSS and JS
     const loadLeaflet = () => {
-      // Load CSS
       if (!document.querySelector('link[href*="leaflet"]')) {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
         document.head.appendChild(link);
       }
 
-      // Load JS
       if (!window.L) {
-        const script = document.createElement('script');
-        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        script.async = true;
-        
-        script.onload = () => {
-          initializeMap();
-        };
-        
-        document.head.appendChild(script);
+        const script = document.createElement("script");
+        script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+        script.onload = initializeMap;
+        document.body.appendChild(script);
       } else {
         initializeMap();
       }
@@ -34,32 +27,30 @@ const Map = ({ location }) => {
     const initializeMap = () => {
       if (!mapRef.current || !window.L) return;
 
-      // Clear previous map
-      if (window.mapInstance) {
-        window.mapInstance.remove();
-      }
+      if (window.mapInstance) window.mapInstance.remove();
 
-      // Create map
       window.mapInstance = window.L.map(mapRef.current).setView(
-        [location.lat, location.lng], 
-        13
+        [riderLocation.lat, riderLocation.lng],
+        15
       );
 
-      // Add tiles
-      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
+      window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap contributors",
       }).addTo(window.mapInstance);
 
       // Add marker
-      window.L.marker([location.lat, location.lng])
-        .addTo(window.mapInstance)
-        .bindPopup(`Location: ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`)
-        .openPopup();
+      const riderMarker = window.L.marker([riderLocation.lat, riderLocation.lng], {
+        icon: window.L.icon({
+          iconUrl: "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+          iconSize: [32, 32],
+        }),
+      }).addTo(window.mapInstance);
+
+      markerRef.current = riderMarker;
     };
 
     loadLeaflet();
 
-    // Cleanup
     return () => {
       if (window.mapInstance) {
         window.mapInstance.remove();
@@ -68,18 +59,15 @@ const Map = ({ location }) => {
     };
   }, []);
 
-  // Update map when location changes
+  // Update marker when riderLocation changes
   useEffect(() => {
-    if (window.mapInstance && window.L) {
-      window.mapInstance.setView([location.lat, location.lng], 13);
+    if (window.L && window.mapInstance && markerRef.current && riderLocation) {
+      markerRef.current.setLatLng([riderLocation.lat, riderLocation.lng]);
+      window.mapInstance.setView([riderLocation.lat, riderLocation.lng]);
     }
-  }, [location]);
+  }, [riderLocation]);
 
-  return (
-    <div className="map-container">
-      <div ref={mapRef} className="map-canvas" />
-    </div>
-  );
+  return <div className="map-container" ref={mapRef} />;
 };
 
 export default Map;
