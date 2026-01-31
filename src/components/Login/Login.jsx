@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useContext } from "react";
 import "./Login.css";
 import { postData } from "../../api/apiService";
 import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../../contexts/AuthContext";
 
 const Login = () => {
   const [phone, setPhone] = useState("");
@@ -11,9 +12,9 @@ const Login = () => {
   const [timer, setTimer] = useState(30);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { setToken } = useContext(AuthContext);
 
   const otpRefs = useRef([]);
-  const navigate = useNavigate();
 
   useEffect(() => {
     let interval;
@@ -103,8 +104,7 @@ const Login = () => {
       });
       if (response?.responseCode === 200) {
         localStorage.setItem("captainToken", response.data.token);
-
-        navigate("/");
+        setToken(response.data.token);
       } else {
         setError(response.data.message || "Invalid OTP");
       }
